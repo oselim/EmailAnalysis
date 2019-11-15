@@ -26,7 +26,7 @@ object EmailParser extends App {
   private var files: Array[File] = fileUtil.recursiveListFiles(new File("enron-sample-dataset"))
 
   private var vertexArray = new ArrayBuffer[(Long, (String, String))]()
-  private var edgeArray = new ArrayBuffer[(Long, Long, (String, String))]()
+  private var edgeArray = new ArrayBuffer[Edge[(Long, Long, (String, String))]]()
 
   def parseAddresses(fromAddresses: Array[Address], receiverAddresses: Array[Address], xOriginHeader: Array[String], messageID: String): Unit = {
     fromAddresses.foreach(from => {
@@ -61,7 +61,7 @@ object EmailParser extends App {
     var destinationID = 0L
     if (!destinationAddress.equals("default"))
       destinationID = destinationAddress.hashCode.toLong
-    edgeArray.append((sourceID, destinationID, (xOrigin, messageId)))
+    edgeArray.append(Edge(sourceID, destinationID, (xOrigin, messageId)))
   }
 
   files.foreach(file => {
@@ -83,6 +83,13 @@ object EmailParser extends App {
 
   val conf = new SparkConf().setAppName("WordCount").setMaster("local[*]")
   val sc = new SparkContext(conf)
+  private val vertexRDD: RDD[(VertexId, (String, String))] = sc.parallelize( vertexArray )
+  private val edgeRDD: RDD[Edge[(VertexId, VertexId, (String, String))]] = sc.parallelize(edgeArray)
+
+  private val graph = Graph(vertexRDD, edgeRDD)
+  println( graph.numEdges)
+  println( graph.numVertices)
+
 
 
 }
