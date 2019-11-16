@@ -1,12 +1,16 @@
 import java.io.{ByteArrayInputStream, File}
 import java.util.Properties
+
 import javax.mail.{Address, Session}
 import edu.phd.EmailParser.util.FileUtil
+
 import scala.io.Source
 import javax.mail.internet.{InternetAddress, MimeMessage}
+import org.apache.log4j.{Level, Logger}
 
 import scala.collection.mutable.ArrayBuffer
 import org.apache.spark._
+import org.apache.spark.ml.clustering.KMeans
 import org.apache.spark.rdd.RDD
 // import classes required for using GraphX
 import org.apache.spark.graphx._
@@ -25,8 +29,8 @@ object EmailParser extends App {
 
   private var files: Array[File] = fileUtil.recursiveListFiles(new File("enron-sample-dataset"))
 
-  private var vertexArray = new ArrayBuffer[(Long, (String, String))]()
-  private var edgeArray = new ArrayBuffer[Edge[(Long, Long, (String, String))]]()
+  private var vertexArray = new ArrayBuffer[(Long, (String, String, String))]()
+  private var edgeArray = new ArrayBuffer[Edge[ (String, String) ]]()
 
   def parseAddresses(fromAddresses: Array[Address], receiverAddresses: Array[Address], xOriginHeader: Array[String], messageID: String): Unit = {
     fromAddresses.foreach(from => {
@@ -52,7 +56,7 @@ object EmailParser extends App {
       vID = email.hashCode.toLong
 
     if (!vertexArray.exists(vertex => vertex._1.equals(vID))) {
-      vertexArray.append((vID, (xOrigin, messageId)))
+      vertexArray.append((vID, (xOrigin, email, messageId)))
     }
   }
 
@@ -83,12 +87,19 @@ object EmailParser extends App {
 
   val conf = new SparkConf().setAppName("WordCount").setMaster("local[*]")
   val sc = new SparkContext(conf)
-  private val vertexRDD: RDD[(VertexId, (String, String))] = sc.parallelize( vertexArray )
-  private val edgeRDD: RDD[Edge[(VertexId, VertexId, (String, String))]] = sc.parallelize(edgeArray)
+  val rootLogger = Logger.getRootLogger
+  rootLogger.setLevel(Level.ERROR)
+
+  private val vertexRDD: RDD[(VertexId, (String, String, String))] = sc.parallelize(vertexArray)
+  private val edgeRDD: RDD[Edge[(String, String)]] = sc.parallelize(edgeArray)
 
   private val graph = Graph(vertexRDD, edgeRDD)
-  println( graph.numEdges)
-  println( graph.numVertices)
+  println(graph.numEdges)
+  println(graph.numVertices)
+
+  private val pageRank: Graph[Double, Double] = graph.pageRank(0.0001)
+  private val sortedPageRankGraph: RDD[(VertexId, (Double, (String, String, String)))] = pageRank.vertices.join(vertexRDD).sortBy(_._2._1, ascending = false)
+  println(sortedPageRankGraph.collect().deep)
 
 
 

@@ -1,0 +1,1 @@
+When there is none recipient of an e-mail, then a "default" e-mail address recipient is added.
