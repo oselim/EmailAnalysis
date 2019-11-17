@@ -101,6 +101,15 @@ object EmailParser extends App {
   private val sortedPageRankGraph: RDD[(VertexId, (Double, (String, String, String)))] = pageRank.vertices.join(vertexRDD).sortBy(_._2._1, ascending = false)
   println(sortedPageRankGraph.collect().deep)
 
+  println(graph.inDegrees.collect().deep )
+  println(graph.outDegrees.collect().deep )
+
+/*
+  graph.vertices.filter(vertex => {
+    val vertexID = vertex._1
+    graph.
+  })
+*/
 
 
 }

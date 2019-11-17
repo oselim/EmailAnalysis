@@ -1,0 +1,15 @@
+
+Graph Clustering:
+
+http://www.leonidzhukov.net/hse/2016/networks/papers/GraphClustering_Schaeffer07.pdf
+https://www.csc2.ncsu.edu/faculty/nfsamato/practical-graph-mining-with-R/slides/pdf/Graph_Cluster_Analysis.pdf
+http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.98.30&rep=rep1&type=pdf
+
+
+GraphX Tutorial by Berkeley:
+http://ampcamp.berkeley.edu/6/exercises/graph-analytics-with-graphx.html
+
+
+https://blogs.oracle.com/datascience/graph-computations-with-apache-spark
+https://www.linkedin.com/pulse/connected-component-using-map-reduce-apache-spark-shirish-kumar/
+http://note.yuhc.me/2015/03/graphx-property-operator-2/
