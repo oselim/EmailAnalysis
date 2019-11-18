@@ -12,6 +12,7 @@ import scala.collection.mutable.ArrayBuffer
 import org.apache.spark._
 import org.apache.spark.ml.clustering.KMeans
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.{DataFrame, SparkSession}
 // import classes required for using GraphX
 import org.apache.spark.graphx._
 
@@ -89,6 +90,8 @@ object EmailParser extends App {
   val sc = new SparkContext(conf)
   val rootLogger = Logger.getRootLogger
   rootLogger.setLevel(Level.ERROR)
+  val sparkSession = SparkSession.builder.config(sc.getConf).getOrCreate()
+
 
   private val vertexRDD: RDD[(VertexId, (String, String, String))] = sc.parallelize(vertexArray)
   private val edgeRDD: RDD[Edge[(String, String)]] = sc.parallelize(edgeArray)
@@ -97,12 +100,20 @@ object EmailParser extends App {
   println(graph.numEdges)
   println(graph.numVertices)
 
+  case class OutputClass(id: Long, pageRank: Double, email: String)
+
   private val pageRank: Graph[Double, Double] = graph.pageRank(0.0001)
   private val sortedPageRankGraph: RDD[(VertexId, (Double, (String, String, String)))] = pageRank.vertices.join(vertexRDD).sortBy(_._2._1, ascending = false)
-  println(sortedPageRankGraph.collect().deep)
+//  println(sortedPageRankGraph.collect().deep)
 
-  println(graph.inDegrees.collect().deep )
-  println(graph.outDegrees.collect().deep )
+
+  //  println(graph.inDegrees.collect().deep )
+  //  println(graph.outDegrees.collect().deep )
+
+
+  private val vertexDF: DataFrame = sparkSession.createDataFrame(sortedPageRankGraph.map(x => OutputClass(x._1, x._2._1, x._2._2._2) ) )
+
+  vertexDF.show(truncate = false)
 
 /*
   graph.vertices.filter(vertex => {

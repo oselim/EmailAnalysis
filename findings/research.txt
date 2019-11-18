@@ -13,3 +13,47 @@ http://ampcamp.berkeley.edu/6/exercises/graph-analytics-with-graphx.html
 https://blogs.oracle.com/datascience/graph-computations-with-apache-spark
 https://www.linkedin.com/pulse/connected-component-using-map-reduce-apache-spark-shirish-kumar/
 http://note.yuhc.me/2015/03/graphx-property-operator-2/
+
+https://towardsdatascience.com/deepgl-on-neo4j-b27e8c64190f
+https://arxiv.org/pdf/1607.00653.pdf
+https://towardsdatascience.com/node2vec-embeddings-for-graph-data-32a866340fef
+https://olegleyz.github.io/enron_classifier.html
+Data Exploration¶
+The features in the data fall into three major types, namely financial features, email features and POI labels.
+There are 146 samples with 20 features and a binary classification ("poi"), 2774 data points.
+Among 146 samples, there are 18 POI and 128 non-POI.
+Among 2774, there are 1358 (48.96%) data points with NaN values.
+http://bailando.sims.berkeley.edu/enron_email.html
+bu bailando sims berkeley adresinde dataset, etiketler vs anlatılıyor
+https://data.world/brianray/enron-email-dataset
+son iki bağlantı daha anlamlı görünüyor, diğerleri ile vakit kaybetme doğrudan bunlara bakalım dilersen
+https://www.sciencenews.org/article/information-flow-can-reveal-dirty-deeds
+https://stanford.edu/~rezab/sparkclass/slides/ankur_graphx.pdf
+yansı 10
+https://rdrr.io/cran/igraphdata/man/enron.html
+https://beta.vu.nl/nl/Images/werkstuk-eems_tcm235-414143.pdf
+
+We created a network based on the senders and receivers in the Enron email dataset, whereas, the weight of the
+edge between two individuals is the sum of the number of emails between them.
+First, we use visualization techniques to analyze the graph. Second we use statistics, where we use the generated
+ graph of visualization. With each technique, we try to use information gathered by previously. Main findings
+  We used the techniques ranking and partitioning, which are visualization techniques. We found three possible
+  fraudulent individuals (one is debatable) out of five individuals for the ranking technique. For the indication,
+  whether, someone is possible fraudulent we used a web search. Furthermore, the two individuals who had a much higher
+  ranking value than the others, were both indicated as possible fraudulent. However, for the technique partitioning,
+  the three individuals that were selected were not possible fraudulent.
+We generated the egocentric networks of the nodes with the highest ranking values and looked at their overlap.
+We found one individual with a strong connection to both, after a web search we indicated her as possible fraudulent.
+ Furthermore, we looked at hubs and authorities using statistics, of the nine individuals we found, we indicated four
+  as possible fraudulent. Therefore, we conclude that it is possible to perform outlier detection on a network using
+  graph mining to indicate possible fraudulent individuals in a communication network
+
+
+Because we had only limited time (one month) to perform this research, our research has some limitations.
+We selected the scope only to look at the network itself and not at the content of the emails. Therefore, we disregarded a substantial amount of information.
+
+Furthermore, this paper is focussed on researching outlier detection using graph mining specifically on the Enron email dataset.
+Therefore, we can only give an indication of the quality and effectiveness of the graph mining techniques on outlier detection.
+At last, we have done a web search to indicate if individuals are fraudulent concerning Enron. However, these indications do not have to be true.
+
+Furthermore, we found too little information for some of the individuals to make an indication.
