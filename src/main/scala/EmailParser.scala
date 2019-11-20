@@ -12,9 +12,7 @@ import scala.collection.mutable.ArrayBuffer
 import org.apache.spark._
 import org.apache.spark.ml.clustering.KMeans
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.types.{ArrayType, LongType, StructField, StructType}
 import org.apache.spark.sql.{DataFrame, SparkSession}
-// import classes required for using GraphX
 import org.apache.spark.graphx._
 
 
@@ -27,18 +25,14 @@ object EmailParser extends App {
     put("mail.mime.address.strict", "false")
   })
 
-  private var fileUtil = new FileUtil()
+  private val fileUtil = new FileUtil()
+  private val files: Array[File] = fileUtil.recursiveListFiles(new File("enron-sample-dataset"))
 
-  private var files: Array[File] = fileUtil.recursiveListFiles(new File("enron-sample-dataset"))
+  private val vertexArray = new ArrayBuffer[(Long, String)]()
+  private val edgeArray = new ArrayBuffer[Edge[(String, String)]]()
 
-  private var vertexArray = new ArrayBuffer[(Long, String)]()
-  private var edgeArray = new ArrayBuffer[Edge[(String, String)]]()
-
-  def parseAddresses(fromAddresses: Array[Address], receiverAddresses: Array[Address], xOriginHeader: Array[String], messageID: String): Unit = {
+  def parseAddresses(fromAddresses: Array[Address], receiverAddresses: Array[Address]): Unit = {
     fromAddresses.foreach(from => {
-      //TODO algoritma yazilmali
-      //TODO from base alinarak her bir from icin bir vertex eklenip butun to cc bcc dolasilip vertexler eklenip, egdeler eklenmeli. Her bir vertex icin contains controlu yapilmali. edgeler icin de contains kontrolu yapilabilir.
-
       val fromString = from.toString
       addToVertex(fromString)
 
@@ -52,7 +46,7 @@ object EmailParser extends App {
 
   def addToVertex(email: String): Unit = {
     var vID = 0L
-    if (!email.equals("default"))
+    if (!email.equals("NonRecipient"))
       vID = email.hashCode.toLong
 
     if (!vertexArray.exists(vertex => vertex._1.equals(vID))) {
@@ -63,7 +57,7 @@ object EmailParser extends App {
   def addToEdge(sourceAddress: String, destinationAddress: String): Unit = {
     val sourceID = sourceAddress.hashCode.toLong
     var destinationID = 0L
-    if (!destinationAddress.equals("default"))
+    if (!destinationAddress.equals("NonRecipient"))
       destinationID = destinationAddress.hashCode.toLong
     edgeArray.append(Edge(sourceID, destinationID, (sourceAddress, destinationAddress)))
   }
@@ -77,10 +71,7 @@ object EmailParser extends App {
     if (allRecipients == null) {
       allRecipients = Array.apply(new InternetAddress("NonRecipient", false))
     }
-    val xOriginHeader = mimeMessage.getHeader("X-Origin")
-    val messageID = mimeMessage.getMessageID
-
-    parseAddresses(fromAddresses, allRecipients, xOriginHeader, messageID)
+    parseAddresses(fromAddresses, allRecipients)
 
     source.close()
   })
@@ -90,7 +81,6 @@ object EmailParser extends App {
   val rootLogger = Logger.getRootLogger
   rootLogger.setLevel(Level.ERROR)
   val sparkSession = SparkSession.builder.config(sc.getConf).getOrCreate()
-
 
   private val vertexRDD: RDD[(VertexId, String)] = sc.parallelize(vertexArray)
   private val edgeRDD: RDD[Edge[(String, String)]] = sc.parallelize(edgeArray)
@@ -104,21 +94,29 @@ object EmailParser extends App {
 
   private val triangleCounts: Graph[PartitionID, (String, String)] = graph.triangleCount()
 
+  private val connectedComponents: Graph[VertexId, (String, String)] = graph.connectedComponents()
 
-  case class OutputClass(id: Long, pageRank: Option[Double], email: Option[String], inDegree: Option[Int], outDegree: Option[Int], triangleCount: Option[Int])
+  case class OutputClass(id: Long, pageRank: Option[Double], email: Option[String],
+                         inDegree: Option[Int], outDegree: Option[Int], triangleCount: Option[Int],
+                         connectedComponent: Option[VertexId])
+
   private val vertexDF: DataFrame = sparkSession.createDataFrame(
-
-    graph.vertices.fullOuterJoin(pageRank.vertices).fullOuterJoin(graph.inDegrees).fullOuterJoin(graph.outDegrees).fullOuterJoin(triangleCounts.vertices)
+    graph.vertices.fullOuterJoin(pageRank.vertices)
+      .fullOuterJoin(graph.inDegrees)
+      .fullOuterJoin(graph.outDegrees)
+      .fullOuterJoin(triangleCounts.vertices)
+      .fullOuterJoin(connectedComponents.vertices)
       .map(vertex => {
-    val vertexID = vertex._1
-    val pageRankValue = vertex._2._1.get._1.get._1.get._2
-    val email = vertex._2._1.get._1.get._1.get._1
-    val inDegree = vertex._2._1.get._1.get._2
-    val outDegree = vertex._2._1.get._2
-    val triangleCount = vertex._2._2
+        val vertexID = vertex._1
+        val pageRankValue = vertex._2._1.get._1.get._1.get._1.get._2
+        val email = vertex._2._1.get._1.get._1.get._1.get._1
+        val inDegree = vertex._2._1.get._1.get._1.get._2
+        val outDegree = vertex._2._1.get._1.get._2
+        val triangleCount = vertex._2._1.get._2
+        val connectedComponent = vertex._2._2
 
-    OutputClass(vertexID, pageRankValue, email, inDegree, outDegree, triangleCount)
-  } ) )
+        OutputClass(vertexID, pageRankValue, email, inDegree, outDegree, triangleCount, connectedComponent)
+      }))
 
   vertexDF.show(571, truncate = false)
 

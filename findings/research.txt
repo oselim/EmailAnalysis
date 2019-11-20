@@ -14,6 +14,15 @@ https://blogs.oracle.com/datascience/graph-computations-with-apache-spark
 https://www.linkedin.com/pulse/connected-component-using-map-reduce-apache-spark-shirish-kumar/
 http://note.yuhc.me/2015/03/graphx-property-operator-2/
 
+
+Validation Strategy
+The validation is a process of model performance evaluation.
+Classic mistace is to use small data set for the model training or validate model on the same data set as train it.
+There are a number of strategies to validate the model.
+One of them is to split the available data into train and test data
+another one is to perform a cross validation: process of splitting
+the data on k beans equal size; run learning experiments; repeat this operation number of times and take the average test result.
+
 https://towardsdatascience.com/deepgl-on-neo4j-b27e8c64190f
 
 https://arxiv.org/pdf/1607.00653.pdf
@@ -67,3 +76,4 @@ Therefore, we can only give an indication of the quality and effectiveness of th
 At last, we have done a web search to indicate if individuals are fraudulent concerning Enron. However, these indications do not have to be true.
 
 Furthermore, we found too little information for some of the individuals to make an indication.
+
