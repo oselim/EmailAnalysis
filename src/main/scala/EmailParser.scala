@@ -1,8 +1,10 @@
 import java.io.{ByteArrayInputStream, File}
 import java.util.Properties
 
+import com.centrality.kBC.KBetweenness
 import javax.mail.{Address, Session}
 import edu.phd.EmailParser.util.FileUtil
+import harmonicCentrality.HarmonicCentrality
 
 import scala.io.Source
 import javax.mail.internet.{InternetAddress, MimeMessage}
@@ -15,6 +17,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.graphx._
 import org.apache.spark.ml.feature.VectorAssembler
+import org.apache.spark.sql.functions._
 
 
 object EmailParser extends App {
@@ -96,51 +99,56 @@ object EmailParser extends App {
   private val connectedComponents: Graph[VertexId, (String, String)] = graph.connectedComponents()
   private val inNeighbors: VertexRDD[Array[VertexId]] = graph.collectNeighborIds(EdgeDirection.In)
   private val outNeighborIds: VertexRDD[Array[VertexId]] = graph.collectNeighborIds(EdgeDirection.Out)
+  private val kBetweenness: Graph[Double, Double] = KBetweenness.run(graph, 2)
+  private val harmonicCentrality: Graph[Double, PartitionID] = HarmonicCentrality.harmonicCentrality(graph)
 
-  case class OutputClass(id: Long, pageRank: Double, email: String, inDegree: Int, outDegree: Int, triangleCount: Int,
-                         connectedComponent: VertexId, inNeighbors: Int, outNeighborIds: Int)
+  case class OutputClass(id: Long, pageRank: Option[Double], email: String, inDegree: Option[Int],
+                         outDegree: Option[Int], triangleCount: Option[Int], connectedComponent: Option[VertexId],
+                         inNeighbors: Option[Array[VertexId]], outNeighborIds: Option[Array[VertexId]],
+                         kBetweennessCentrality: Option[Double], harmonicCentrality: Option[Double])
 
   private val vertexDF: DataFrame = sparkSession.createDataFrame(
-    graph.vertices.fullOuterJoin(pageRank.vertices)
-      .fullOuterJoin(graph.inDegrees)
-      .fullOuterJoin(graph.outDegrees)
-      .fullOuterJoin(triangleCounts.vertices)
-      .fullOuterJoin(connectedComponents.vertices)
-      .fullOuterJoin(inNeighbors)
-      .fullOuterJoin(outNeighborIds)
-      .map(vertex => {
-        val vertexID = vertex._1
-        val pageRankValue = vertex._2._1.get._1.get._1.get._1.get._1.get._1.get._2.get
-        val email = vertex._2._1.get._1.get._1.get._1.get._1.get._1.get._1.get
-        val inDegree = vertex._2._1.get._1.get._1.get._1.get._1.get._2.getOrElse(0)
-        val outDegree = vertex._2._1.get._1.get._1.get._1.get._2.getOrElse(0)
-        val triangleCount = vertex._2._1.get._1.get._1.get._2.get
-        val connectedComponent = vertex._2._1.get._1.get._2.get
-        val inNeighbors = vertex._2._1.get._2.get.toVector
-        val outNeighborIds = vertex._2._2.get.toVector
+    graph.vertices.leftOuterJoin(pageRank.vertices)
+      .leftOuterJoin(graph.inDegrees)
+      .leftOuterJoin(graph.outDegrees)
+      .leftOuterJoin(triangleCounts.vertices)
+      .leftOuterJoin(connectedComponents.vertices)
+      .leftOuterJoin(inNeighbors)
+      .leftOuterJoin(outNeighborIds)
+      .leftOuterJoin(kBetweenness.vertices)
+      .leftOuterJoin(harmonicCentrality.vertices)
+      .map({
+        case (vertexID, (((((((((email, pageRankValue),
+        inDegreeOutput),
+        outDegreeOutput),
+        triangleCountOutput),
+        connectedComponentOutput),
+        inNeighborsOutput),
+        outNeighborIdsOutput),
+        kBetweennessOutput),
+        harmonicCentralityOutput))
+        =>
+          OutputClass(
+            vertexID, pageRankValue, email, inDegreeOutput, outDegreeOutput, triangleCountOutput,
+            connectedComponentOutput, inNeighborsOutput, outNeighborIdsOutput, kBetweennessOutput,
+            harmonicCentralityOutput)
+      })).sort("pageRank", "kBetweennessCentrality")
 
-        OutputClass(vertexID, pageRankValue, email, inDegree, outDegree, triangleCount, connectedComponent, inNeighbors.length,
-          outNeighborIds.length)
-      }))
-
-//  vertexDF.show(571, truncate = true)
-
-  private val assembler = new VectorAssembler().setInputCols(Array("connectedComponent", "pageRank", "inDegree", "outDegree",
-    "triangleCount", "inNeighbors", "outNeighborIds")).setOutputCol("features")
-
-  private val featuredDataFrame: DataFrame = assembler.transform(vertexDF)
-
-  private val model: KMeansModel = new KMeans()
-    .setSeed(1)
-    .setK(2)
-    .setFeaturesCol("features")
-    .setPredictionCol("predictions")
-    .fit(featuredDataFrame)
-
-  model.clusterCenters.foreach(println)
-
-  private val predictedDataFrame: DataFrame = model.transform(featuredDataFrame)
-
-  predictedDataFrame.show(600, truncate = false)
+  vertexDF.show(571, truncate = true)
+  /*
+   K-Means Part
+   */
+  //  private val assembler = new VectorAssembler().setInputCols(Array("connectedComponent", "pageRank", "inDegree", "outDegree",
+  //    "triangleCount", "inNeighbors", "outNeighborIds")).setOutputCol("features")
+  //  private val featuredDataFrame: DataFrame = assembler.transform(vertexDF)
+  //  private val model: KMeansModel = new KMeans()
+  //    .setSeed(1)
+  //    .setK(2)
+  //    .setFeaturesCol("features")
+  //    .setPredictionCol("predictions")
+  //    .fit(featuredDataFrame)
+  //  model.clusterCenters.foreach(println)
+  //  private val predictedDataFrame: DataFrame = model.transform(featuredDataFrame)
+  //  predictedDataFrame.show(600, truncate = false)
 
 }

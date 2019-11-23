@@ -77,3 +77,54 @@ At last, we have done a web search to indicate if individuals are fraudulent con
 
 Furthermore, we found too little information for some of the individuals to make an indication.
 
+
+Distributed K-Betweenness:
+The number of shortest paths from all vertices to all others that pass through that node.
+Independent computation for each node. Not implemented in GraphX.
+Algorithm:
+    Divide nodes between machines
+    For each machine, compute the Betweenness contribution of each node to every other node in the graph
+    Aggregate results from all machines
+Problems:
+    Can’t get information about a specific node in GraphX
+    Need to copy graph to every machine (goes bad with big graphs)
+Solutions:
+    Can’t get information about a specific node in GraphX
+    GraphX Pregel API
+    Run 1 iteration, with every node passing its identity to all its neighbors
+Need to copy graph to every machine (goes wrong with big graphs)
+    We didn’t find a good solution for this problem
+    How can we avoid copying the whole graph to every machine?
+
+Normally, betweenness is hard to calculate. distributed betweenness is very hard. It is very hard over 1M nodes to calculate.
+But using distributed approach, it is possible.
+
+Borgatti and Everett (2006) define the k-betweenness of a vertex as the sum of dependencies of pairs at most k part.
+To calculate a node's Betweenness contribution to other nodes, we only need to consider nodes at distance <_ k
+
+https://www.slideshare.net/DanielMarcous/distributed-kbetweenness-spark
+https://spark-packages.org/package/dmarcous/spark-betweenness
+https://github.com/dmarcous/spark-betweenness
+
+
+Closeness Centrality:
+average distance of every single of node to everyone else.
+In a connected graph, the normalized closeness centrality (or closeness) of a node is the average length of the shortest path between the node and all other nodes in the graph. Thus the more central a node is, the closer it is to all other nodes.
+
+
+Harmonic Centrality:
+Harmonic centrality of a node x is the sum of the reciprocal of the shortest path distances from all other nodes to x.
+It uses HyperLogLog algorithm.
+
+Harmonic centrality : https://en.wikipedia.org/wiki/Centrality#Closeness_centrality
+In a (not necessarily connected) graph, the harmonic centrality reverses the sum and reciprocal operations in the definition of closeness centrality:
+Harmonic centrality can be normalized by dividing by {\displaystyle N-1}N-1, where {\displaystyle N}N is the number of nodes in the graph.
+
+
+Harmonic centrality was proposed by Marchiori and Latora (2000)[18] and then independently by Dekker (2005), using the name "valued centrality,"[19] and by Rochat (2009).[20]
+
+https://spark-packages.org/package/webgeist/spark-centrality
+https://github.com/pvgladkov/spark-centrality
+https://events.yandex.ru/lib/talks/1287/
+http://infoscience.epfl.ch/record/200525/files/%5BEN%5DASNA09.pdf
+https://en.wikipedia.org/wiki/Centrality
