@@ -24,3 +24,8 @@ libraryDependencies += "dmarcous" % "spark-betweenness" % "1.0-s_2.10"
 
 // https://mvnrepository.com/artifact/com.twitter/algebird-core
 libraryDependencies += "com.twitter" %% "algebird-core" % "0.13.6"
+
+// one or all from:
+libraryDependencies += "ml.sparkling" %% "sparkling-graph-examples" % "0.0.7"
+libraryDependencies += "ml.sparkling" %% "sparkling-graph-loaders" % "0.0.7"
+libraryDependencies += "ml.sparkling" %% "sparkling-graph-operators" % "0.0.7"

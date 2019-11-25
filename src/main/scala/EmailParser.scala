@@ -5,6 +5,7 @@ import com.centrality.kBC.KBetweenness
 import javax.mail.{Address, Session}
 import edu.phd.EmailParser.util.FileUtil
 import harmonicCentrality.HarmonicCentrality
+import ml.sparkling.graph.operators.OperatorsDSL._
 
 import scala.io.Source
 import javax.mail.internet.{InternetAddress, MimeMessage}

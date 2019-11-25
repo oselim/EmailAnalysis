@@ -107,6 +107,9 @@ https://spark-packages.org/package/dmarcous/spark-betweenness
 https://github.com/dmarcous/spark-betweenness
 
 
+Sparkling-Graph: library
+https://github.com/sparkling-graph/sparkling-graph
+
 Closeness Centrality:
 average distance of every single of node to everyone else.
 In a connected graph, the normalized closeness centrality (or closeness) of a node is the average length of the shortest path between the node and all other nodes in the graph. Thus the more central a node is, the closer it is to all other nodes.
