@@ -6,6 +6,8 @@ import javax.mail.{Address, Session}
 import edu.phd.EmailParser.util.FileUtil
 import harmonicCentrality.HarmonicCentrality
 import ml.sparkling.graph.operators.OperatorsDSL._
+import ml.sparkling.graph.api.operators.measures.VertexMeasureConfiguration
+import ml.sparkling.graph.api.operators.algorithms.coarsening.CoarseningAlgorithm.Component
 
 import scala.io.Source
 import javax.mail.internet.{InternetAddress, MimeMessage}
@@ -19,6 +21,7 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.graphx._
 import org.apache.spark.ml.feature.VectorAssembler
 import org.apache.spark.sql.functions._
+import org.graphframes.GraphFrame
 
 
 object EmailParser extends App {
@@ -33,8 +36,8 @@ object EmailParser extends App {
   private val fileUtil = new FileUtil()
   private val files: Array[File] = fileUtil.recursiveListFiles(new File("enron-sample-dataset"))
 
-  private val vertexArray = new ArrayBuffer[(Long, String)]()
-  private val edgeArray = new ArrayBuffer[Edge[(String, String)]]()
+  private val vertexArray = new ArrayBuffer[(VertexId, String)]()
+  private val edgeArray = new ArrayBuffer[Edge[Int]]()
 
   def parseAddresses(fromAddresses: Array[Address], receiverAddresses: Array[Address]): Unit = {
     fromAddresses.foreach(from => {
@@ -64,7 +67,7 @@ object EmailParser extends App {
     var destinationID = 0L
     if (!destinationAddress.equals("NonRecipient"))
       destinationID = destinationAddress.hashCode.toLong
-    edgeArray.append(Edge(sourceID, destinationID, (sourceAddress, destinationAddress)))
+    edgeArray.append(Edge(sourceID, destinationID, 1))
   }
 
   files.foreach(file => {
@@ -88,54 +91,110 @@ object EmailParser extends App {
   val sparkSession = SparkSession.builder.config(sc.getConf).getOrCreate()
 
   private val vertexRDD: RDD[(VertexId, String)] = sc.parallelize(vertexArray)
-  private val edgeRDD: RDD[Edge[(String, String)]] = sc.parallelize(edgeArray)
+  private val edgeRDD: RDD[Edge[Int]] = sc.parallelize(edgeArray)
 
   private val graph = Graph(vertexRDD, edgeRDD)
+  private val graphFrame: GraphFrame = GraphFrame.fromGraphX(graph)
+
   println(graph.numEdges)
   println(graph.numVertices)
 
 
   private val pageRank: Graph[Double, Double] = graph.pageRank(0.0001)
-  private val triangleCounts: Graph[PartitionID, (String, String)] = graph.triangleCount()
-  private val connectedComponents: Graph[VertexId, (String, String)] = graph.connectedComponents()
+  private val triangleCounts: Graph[PartitionID, Int] = graph.triangleCount()
+  private val connectedComponents: Graph[VertexId, Int] = graph.connectedComponents()
+  private val stronglyConnectedComponents: Graph[VertexId, PartitionID] = graph.stronglyConnectedComponents(10)
   private val inNeighbors: VertexRDD[Array[VertexId]] = graph.collectNeighborIds(EdgeDirection.In)
   private val outNeighborIds: VertexRDD[Array[VertexId]] = graph.collectNeighborIds(EdgeDirection.Out)
   private val kBetweenness: Graph[Double, Double] = KBetweenness.run(graph, 2)
   private val harmonicCentrality: Graph[Double, PartitionID] = HarmonicCentrality.harmonicCentrality(graph)
+  private val graphEigenVectorCentrality: Graph[Double, PartitionID] = graph.eigenvectorCentrality()
+  private val graphClosenessCentrality: Graph[Double, PartitionID] = graph.closenessCentrality() //VertexMeasureConfiguration(treatAsUndirected = true))
+  private val graphNeighborhoodConnectivity: Graph[Double, PartitionID] = graph.neighborhoodConnectivity()
+  private val graphVertexEmbeddedness: Graph[Double, PartitionID] = graph.vertexEmbeddedness()
+  private val graphLocalClustering: Graph[Double, PartitionID] = graph.localClustering()
+  private val pScanCommunityDetection: Graph[Long, PartitionID] = graph.PSCAN()
+  private val graphLabelPropagation: Graph[Component, PartitionID] = graph.LPCoarse()
+  private val gfLabelPropagationDF: DataFrame = graphFrame.labelPropagation.maxIter(5).run()
 
   case class OutputClass(id: Long, pageRank: Option[Double], email: String, inDegree: Option[Int],
-                         outDegree: Option[Int], triangleCount: Option[Int], connectedComponent: Option[VertexId],
+                         outDegree: Option[Int], triangleCount: Option[Int], connectedComponent: Option[Long],
+                         stronglyConnectedComponents: Option[Long],
                          inNeighbors: Option[Array[VertexId]], outNeighborIds: Option[Array[VertexId]],
-                         kBetweennessCentrality: Option[Double], harmonicCentrality: Option[Double])
+                         kBetweennessCentrality: Option[Double], harmonicCentrality: Option[Double],
+                         eigenVectorCentrality: Option[Double], closenessCentrality: Option[Double],
+                         neighborhoodConnectivity: Option[Double], graphVertexEmbeddedness: Option[Double],
+                         graphLocalClustering: Option[Double], pScanCommunityDetection: Option[Long],
+                         graphLabelPropagation: Option[Component]
+                        )
+
 
   private val vertexDF: DataFrame = sparkSession.createDataFrame(
-    graph.vertices.leftOuterJoin(pageRank.vertices)
+    graph.vertices.
+      leftOuterJoin(pageRank.vertices)
       .leftOuterJoin(graph.inDegrees)
       .leftOuterJoin(graph.outDegrees)
       .leftOuterJoin(triangleCounts.vertices)
       .leftOuterJoin(connectedComponents.vertices)
+      .leftOuterJoin(stronglyConnectedComponents.vertices)
       .leftOuterJoin(inNeighbors)
       .leftOuterJoin(outNeighborIds)
       .leftOuterJoin(kBetweenness.vertices)
       .leftOuterJoin(harmonicCentrality.vertices)
+      .leftOuterJoin(graphEigenVectorCentrality.vertices)
+      .leftOuterJoin(graphClosenessCentrality.vertices)
+      .leftOuterJoin(graphNeighborhoodConnectivity.vertices)
+      .leftOuterJoin(graphVertexEmbeddedness.vertices)
+      .leftOuterJoin(graphLocalClustering.vertices)
+      .leftOuterJoin(pScanCommunityDetection.vertices)
+      .leftOuterJoin(graphLabelPropagation.vertices)
       .map({
-        case (vertexID, (((((((((email, pageRankValue),
-        inDegreeOutput),
-        outDegreeOutput),
-        triangleCountOutput),
-        connectedComponentOutput),
-        inNeighborsOutput),
-        outNeighborIdsOutput),
-        kBetweennessOutput),
-        harmonicCentralityOutput))
+        case (vertexID,
+        (
+          (
+            (
+              (
+                (
+                  (
+                    (
+                      (
+                        (
+                          (
+                            (
+                              (
+                                (
+                                  (
+                                    (
+                                      (
+                                        (email, pageRankValue),
+                                        inDegreeOutput),
+                                      outDegreeOutput),
+                                    triangleCountOutput),
+                                  connectedComponentOutput),
+                                stronglyConnectedComponents),
+                              inNeighborsOutput),
+                            outNeighborIdsOutput),
+                          kBetweennessOutput),
+                        harmonicCentralityOutput),
+                      eigenVectorCent),
+                    closenessCent),
+                  neighborConnectivity),
+                graphVertexEmbeddedness),
+              graphLocalClustering),
+            pScanCommunityDetection),
+          graphLabelPropagation)
+          )
         =>
           OutputClass(
             vertexID, pageRankValue, email, inDegreeOutput, outDegreeOutput, triangleCountOutput,
-            connectedComponentOutput, inNeighborsOutput, outNeighborIdsOutput, kBetweennessOutput,
-            harmonicCentralityOutput)
+            connectedComponentOutput, stronglyConnectedComponents, inNeighborsOutput, outNeighborIdsOutput, kBetweennessOutput,
+            harmonicCentralityOutput, eigenVectorCent, closenessCent, neighborConnectivity, graphVertexEmbeddedness,
+            graphLocalClustering, pScanCommunityDetection, graphLabelPropagation
+          )
       })).sort("pageRank", "kBetweennessCentrality")
 
   vertexDF.show(571, truncate = true)
+  gfLabelPropagationDF.show(571, truncate = false)
   /*
    K-Means Part
    */

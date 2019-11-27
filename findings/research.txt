@@ -109,6 +109,10 @@ https://github.com/dmarcous/spark-betweenness
 
 Sparkling-Graph: library
 https://github.com/sparkling-graph/sparkling-graph
+https://sparkling-graph.readthedocs.io/en/latest/index.html
+
+GraphFrames added:
+http://graphframes.github.io/graphframes/docs/_site/user-guide.html#graphx-to-graphframe
 
 Closeness Centrality:
 average distance of every single of node to everyone else.

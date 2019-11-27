@@ -6,6 +6,8 @@ scalaVersion := "2.11.12"
 
 resolvers += "SparkPackages" at "https://dl.bintray.com/spark-packages/maven/"
 
+//resolvers +=  "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
+
 // https://mvnrepository.com/artifact/javax.mail/javax.mail-api
 libraryDependencies += "javax.mail" % "javax.mail-api" % "1.6.2"
 // https://mvnrepository.com/artifact/com.sun.mail/javax.mail
@@ -29,3 +31,6 @@ libraryDependencies += "com.twitter" %% "algebird-core" % "0.13.6"
 libraryDependencies += "ml.sparkling" %% "sparkling-graph-examples" % "0.0.7"
 libraryDependencies += "ml.sparkling" %% "sparkling-graph-loaders" % "0.0.7"
 libraryDependencies += "ml.sparkling" %% "sparkling-graph-operators" % "0.0.7"
+
+// https://mvnrepository.com/artifact/graphframes/graphframes
+libraryDependencies += "graphframes" % "graphframes" % "0.7.0-spark2.4-s_2.11"
