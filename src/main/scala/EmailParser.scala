@@ -23,8 +23,8 @@ import org.apache.spark.ml.feature.VectorAssembler
 import org.apache.spark.sql.functions._
 import org.graphframes.GraphFrame
 
-
 object EmailParser extends App {
+
 
   System.setProperty("mail.mime.address.strict", "false")
 
@@ -195,20 +195,6 @@ object EmailParser extends App {
 
   vertexDF.show(571, truncate = true)
   gfLabelPropagationDF.show(571, truncate = false)
-  /*
-   K-Means Part
-   */
-  //  private val assembler = new VectorAssembler().setInputCols(Array("connectedComponent", "pageRank", "inDegree", "outDegree",
-  //    "triangleCount", "inNeighbors", "outNeighborIds")).setOutputCol("features")
-  //  private val featuredDataFrame: DataFrame = assembler.transform(vertexDF)
-  //  private val model: KMeansModel = new KMeans()
-  //    .setSeed(1)
-  //    .setK(2)
-  //    .setFeaturesCol("features")
-  //    .setPredictionCol("predictions")
-  //    .fit(featuredDataFrame)
-  //  model.clusterCenters.foreach(println)
-  //  private val predictedDataFrame: DataFrame = model.transform(featuredDataFrame)
-  //  predictedDataFrame.show(600, truncate = false)
+
 
 }
