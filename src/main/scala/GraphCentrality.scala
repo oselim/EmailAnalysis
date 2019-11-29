@@ -3,7 +3,7 @@ import java.util.Properties
 
 import com.centrality.kBC.KBetweenness
 import javax.mail.{Address, Session}
-import edu.phd.EmailParser.util.FileUtil
+import util.FileUtil
 import harmonicCentrality.HarmonicCentrality
 import ml.sparkling.graph.operators.OperatorsDSL._
 import ml.sparkling.graph.api.operators.measures.VertexMeasureConfiguration

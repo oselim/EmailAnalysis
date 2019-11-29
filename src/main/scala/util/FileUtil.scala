@@ -1,4 +1,5 @@
-package edu.phd.EmailParser.util
+package util
+
 
 import java.io.File
 

@@ -1,12 +1,15 @@
 import java.io.{ByteArrayInputStream, File}
+import java.nio.charset.CodingErrorAction
 import java.util.Properties
+import java.util.concurrent.TimeUnit
 
+import scala.io.Codec
 import GraphCentrality.sparkSession
 import javax.mail.{Address, Session}
-import edu.phd.EmailParser.util.FileUtil
 import ml.sparkling.graph.operators.OperatorsDSL._
 import ml.sparkling.graph.api.operators.measures.VertexMeasureConfiguration
 import ml.sparkling.graph.api.operators.algorithms.coarsening.CoarseningAlgorithm.Component
+import util.FileUtil
 
 import scala.io.Source
 import javax.mail.internet.{InternetAddress, MimeMessage}
@@ -15,15 +18,20 @@ import org.apache.log4j.{Level, Logger}
 import scala.collection.mutable.ArrayBuffer
 import org.apache.spark._
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{DataFrame, RelationalGroupedDataset, SparkSession}
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.graphx._
 import org.apache.spark.sql.functions._
 import org.graphframes.GraphFrame
 
 object CommunityDetection extends App {
 
+  private var t0: Long = System.nanoTime()
 
   System.setProperty("mail.mime.address.strict", "false")
+
+  implicit val codec: Codec = Codec.ISO8859
+  codec.onMalformedInput(CodingErrorAction.REPLACE)
+  codec.onUnmappableCharacter(CodingErrorAction.REPLACE)
 
   val session = Session.getDefaultInstance(new Properties() {
     put("mail.smtp.host", "host")
@@ -31,10 +39,12 @@ object CommunityDetection extends App {
   })
 
   private val fileUtil = new FileUtil()
-  private val files: Array[File] = fileUtil.recursiveListFiles(new File("enron-sample-dataset"))
+  private val files: Array[File] = fileUtil.recursiveListFiles(new File("S:\\6410-proposal\\maildir"))
 
-  private val vertexArray = new ArrayBuffer[(VertexId, String)]()
-  private val edgeArray = new ArrayBuffer[Edge[Int]]()
+  private val vertexArray =
+    new ArrayBuffer[(VertexId, String)]()
+  private val edgeArray =
+    new ArrayBuffer[Edge[Int]]()
 
   def parseAddresses(fromAddresses: Array[Address], receiverAddresses: Array[Address]): Unit = {
     fromAddresses.foreach(from => {
@@ -87,11 +97,21 @@ object CommunityDetection extends App {
   rootLogger.setLevel(Level.ERROR)
   val sparkSession = SparkSession.builder.config(sc.getConf).getOrCreate()
 
+  sc.setCheckpointDir("S:\\6410-proposal\\checkPointing\\")
+
+  private var t1: Long = System.nanoTime()
+  println("Pre-processing took Elapsed time of " + (t1 - t0) + " nanoseconds;  " + TimeUnit.MILLISECONDS.convert((t1 - t0), TimeUnit.NANOSECONDS) + " Millis")
+
+  t0 = System.nanoTime()
+
   private val vertexRDD: RDD[(VertexId, String)] = sc.parallelize(vertexArray)
   private val edgeRDD: RDD[Edge[Int]] = sc.parallelize(edgeArray)
 
   private val graph = Graph(vertexRDD, edgeRDD)
   private val graphFrame: GraphFrame = GraphFrame.fromGraphX(graph)
+
+  t1 = System.nanoTime()
+  println("Graph building took Elapsed time of " + (t1 - t0) + " nanoseconds;  " + TimeUnit.MILLISECONDS.convert((t1 - t0), TimeUnit.NANOSECONDS) + " Millis")
 
   println(graph.numEdges)
   println(graph.numVertices)
@@ -123,8 +143,8 @@ object CommunityDetection extends App {
   println("SCAN (PSCAN): ")
   private val pScanCommunityDetection: Graph[Long, PartitionID] = sparkSession.time(graph.PSCAN())
 
-  println("Label propagation based graph coarsening: ")
-  private val graphLabelPropagation: Graph[Component, PartitionID] = sparkSession.time(graph.LPCoarse())
+  //  println("Label propagation based graph coarsening: ")
+  //  private val graphLabelPropagation: Graph[Component, PartitionID] = sparkSession.time(graph.LPCoarse())
 
   println("Label Propagation Algorithm GraphFrame: ")
   private val gfLabelPropagationDF: DataFrame = sparkSession.time(graphFrame.labelPropagation.maxIter(5).run())
@@ -139,8 +159,8 @@ object CommunityDetection extends App {
                          stronglyConnectedComponent: Option[Long],
                          pScanCommunityDetection: Option[Long],
                          inNeighbors: Option[Array[VertexId]],
-                         outNeighborIds: Option[Array[VertexId]],
-                         graphLabelPropagation: Option[Component]
+                         outNeighborIds: Option[Array[VertexId]]
+                         //                         graphLabelPropagation: Option[Component]
                         )
 
 
@@ -155,7 +175,7 @@ object CommunityDetection extends App {
       .leftOuterJoin(pScanCommunityDetection.vertices)
       .leftOuterJoin(inNeighbors)
       .leftOuterJoin(outNeighborIds)
-      .leftOuterJoin(graphLabelPropagation.vertices)
+      //      .leftOuterJoin(graphLabelPropagation.vertices)
       .map({
         case (vertexID,
         (
@@ -164,7 +184,8 @@ object CommunityDetection extends App {
               (
                 (
                   (
-                    ((
+                    (
+                      //                      (
                       (
                         (email,
                         triangleCountOutput),
@@ -175,8 +196,8 @@ object CommunityDetection extends App {
                 stronglyConnectedComponent),
               pScanCommunityDetection),
             inNeighbors),
-            outNeighborIds),
-          graphLabelPropagation)
+          outNeighborIds)
+          //          graphLabelPropagation)
 
           )
         =>
@@ -191,8 +212,8 @@ object CommunityDetection extends App {
             stronglyConnectedComponent,
             pScanCommunityDetection,
             inNeighbors,
-            outNeighborIds,
-            graphLabelPropagation
+            outNeighborIds
+            //            graphLabelPropagation
           )
       }))
     .join(gfLabelPropagationDF, Seq("id"), "left_outer").drop("attr").withColumnRenamed("label", "graphFrameLabelPropagation")

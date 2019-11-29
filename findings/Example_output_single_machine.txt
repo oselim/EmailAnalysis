@@ -1,0 +1,24 @@
+Pre-processing took Elapsed time of 1187824340100 nanoseconds;  1187824 Millis
+Graph building took Elapsed time of 2456715700 nanoseconds;  2456 Millis
+4276349
+87680
+Triangle Count:
+Time taken: 96 ms
+Connected Components:
+Time taken: 21115 ms
+Strongly Connected Components:
+Time taken: 144591 ms
+In Neighbor IDs:
+Time taken: 9 ms
+Out Neighbor IDs:
+Time taken: 9 ms
+Neighborhood Connectivity:
+Time taken: 53 ms
+Vertex Embeddedness:
+Time taken: 39 ms
+Local Clustering:
+Time taken: 20 ms
+SCAN (PSCAN):
+Time taken: 66803 ms
+Label Propagation Algorithm GraphFrame:
+Time taken: 138654 ms
