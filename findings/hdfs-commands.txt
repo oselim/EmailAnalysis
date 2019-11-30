@@ -1,0 +1,3 @@
+# sudo -u hdfs hadoop fs -count -v /opt/phd/enron-sample-dataset/
+# find enron-sample-dataset/ -type f | wc -l
+# find maildir/ -type f | wc -l

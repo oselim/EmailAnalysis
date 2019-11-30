@@ -6,9 +6,8 @@ import java.util.concurrent.TimeUnit
 import scala.io.Codec
 import javax.mail.{Address, Session}
 import ml.sparkling.graph.operators.OperatorsDSL._
-import ml.sparkling.graph.api.operators.measures.VertexMeasureConfiguration
-import ml.sparkling.graph.api.operators.algorithms.coarsening.CoarseningAlgorithm.Component
 import util.FileUtil
+import org.apache.spark.sql.Column
 
 import scala.io.Source
 import javax.mail.internet.{InternetAddress, MimeMessage}
@@ -24,7 +23,8 @@ import org.graphframes.GraphFrame
 
 object CommunityDetection extends App {
 
-  private var t0: Long = System.nanoTime()
+  private val preprocessStartTime: Long = System.nanoTime()
+  private val programStartTime = System.nanoTime()
 
   System.setProperty("mail.mime.address.strict", "false")
 
@@ -38,6 +38,7 @@ object CommunityDetection extends App {
   })
 
   private val fileUtil = new FileUtil()
+  //  private val files: Array[File] = fileUtil.recursiveListFiles(new File("S:\\6410-proposal\\maildir"))
   private val files: Array[File] = fileUtil.recursiveListFiles(new File("enron-sample-dataset"))
 
   private val vertexArray =
@@ -76,7 +77,6 @@ object CommunityDetection extends App {
     edgeArray.append(Edge(sourceID, destinationID, 1))
   }
 
-  println( "Number of files: " + files.length )
   files.foreach(file => {
     val source = Source.fromFile(file)
     val fileString: String = source.mkString
@@ -90,8 +90,8 @@ object CommunityDetection extends App {
 
     source.close()
   })
-
-  val conf = new SparkConf().setAppName("WordCount").setMaster("local[*]")
+  val cpu = 8
+  val conf = new SparkConf().setAppName("LocalAllData").setMaster("local[" + cpu + "]")
   val sc = new SparkContext(conf)
   val rootLogger = Logger.getRootLogger
   rootLogger.setLevel(Level.ERROR)
@@ -99,10 +99,8 @@ object CommunityDetection extends App {
 
   sc.setCheckpointDir("S:\\6410-proposal\\checkPointing\\")
 
-  private var t1: Long = System.nanoTime()
-  println("Pre-processing took Elapsed time of " + (t1 - t0) + " nanoseconds;  " + TimeUnit.MILLISECONDS.convert((t1 - t0), TimeUnit.NANOSECONDS) + " Millis")
-
-  t0 = System.nanoTime()
+  private val preprocessTime: Long = System.nanoTime() - preprocessStartTime
+  private val graphBuildingStartTime = System.nanoTime()
 
   private val vertexRDD: RDD[(VertexId, String)] = sc.parallelize(vertexArray)
   private val edgeRDD: RDD[Edge[Int]] = sc.parallelize(edgeArray)
@@ -110,44 +108,49 @@ object CommunityDetection extends App {
   private val graph = Graph(vertexRDD, edgeRDD)
   private val graphFrame: GraphFrame = GraphFrame.fromGraphX(graph)
 
-  t1 = System.nanoTime()
-  println("Graph building took Elapsed time of " + (t1 - t0) + " nanoseconds;  " + TimeUnit.MILLISECONDS.convert((t1 - t0), TimeUnit.NANOSECONDS) + " Millis")
+  private val graphBuildingTime = System.nanoTime() - graphBuildingStartTime
 
-  println(graph.numEdges)
-  println(graph.numVertices)
+  private val triangleStartTime: Long = System.nanoTime()
+  private val triangleCounts: Graph[PartitionID, Int] = graph.triangleCount()
+  private val triangleTime: Long = System.nanoTime() - triangleStartTime
 
-  println("Triangle Count: ")
-  private val triangleCounts: Graph[PartitionID, Int] = sparkSession.time(graph.triangleCount())
+  private val ccStartTime: Long = System.nanoTime()
+  private val connectedComponents: Graph[VertexId, Int] = graph.connectedComponents()
+  private val ccTime: Long = System.nanoTime() - ccStartTime
 
-  println("Connected Components: ")
-  private val connectedComponents: Graph[VertexId, Int] = sparkSession.time(graph.connectedComponents())
+  private val sccStartTime: Long = System.nanoTime()
+  private val stronglyConnectedComponents: Graph[VertexId, PartitionID] = graph.stronglyConnectedComponents(10)
+  private val sccTime: Long = System.nanoTime() - sccStartTime
 
-  println("Strongly Connected Components: ")
-  private val stronglyConnectedComponents: Graph[VertexId, PartitionID] = sparkSession.time(graph.stronglyConnectedComponents(10))
+  private val inNeighborStartTime: Long = System.nanoTime()
+  private val inNeighbors: VertexRDD[Array[VertexId]] = graph.collectNeighborIds(EdgeDirection.In)
+  private val inNeighborTime: Long = System.nanoTime() - inNeighborStartTime
 
-  println("In Neighbor IDs: ")
-  private val inNeighbors: VertexRDD[Array[VertexId]] = sparkSession.time(graph.collectNeighborIds(EdgeDirection.In))
+  private val outNeighborStartTime: Long = System.nanoTime()
+  private val outNeighborIds: VertexRDD[Array[VertexId]] = graph.collectNeighborIds(EdgeDirection.Out)
+  private val outNeighborTime: Long = System.nanoTime() - outNeighborStartTime
 
-  println("Out Neighbor IDs: ")
-  private val outNeighborIds: VertexRDD[Array[VertexId]] = sparkSession.time(graph.collectNeighborIds(EdgeDirection.Out))
+  private val neighborhoodConnectivityStartTime: Long = System.nanoTime()
+  private val graphNeighborhoodConnectivity: Graph[Double, PartitionID] = graph.neighborhoodConnectivity()
+  private val neighborhoodConnectivityTime: Long = System.nanoTime() - neighborhoodConnectivityStartTime
 
-  println("Neighborhood Connectivity: ")
-  private val graphNeighborhoodConnectivity: Graph[Double, PartitionID] = sparkSession.time(graph.neighborhoodConnectivity())
+  private val vertexEmbeddednessStartTime: Long = System.nanoTime()
+  private val graphVertexEmbeddedness: Graph[Double, PartitionID] = graph.vertexEmbeddedness()
+  private val vertexEmbeddednessTime: Long = System.nanoTime() - vertexEmbeddednessStartTime
 
-  println("Vertex Embeddedness: ")
-  private val graphVertexEmbeddedness: Graph[Double, PartitionID] = sparkSession.time(graph.vertexEmbeddedness())
+  private val localClusteringStartTime: Long = System.nanoTime()
+  private val graphLocalClustering: Graph[Double, PartitionID] = graph.localClustering()
+  private val localClusteringTime: Long = System.nanoTime() - localClusteringStartTime
 
-  println("Local Clustering: ")
-  private val graphLocalClustering: Graph[Double, PartitionID] = sparkSession.time(graph.localClustering())
+  private val pScanStartTime: Long = System.nanoTime()
+  private val pScanCommunityDetection: Graph[Long, PartitionID] = graph.PSCAN()
+  private val pScanTime: Long = System.nanoTime() - pScanStartTime
 
-  println("SCAN (PSCAN): ")
-  private val pScanCommunityDetection: Graph[Long, PartitionID] = sparkSession.time(graph.PSCAN())
+  private val labelPropagationStartTime: Long = System.nanoTime()
+  private val gfLabelPropagationDF: DataFrame = graphFrame.labelPropagation.maxIter(5).run()
+  private val labelPropagationTime: Long = System.nanoTime() - labelPropagationStartTime
 
-  //  println("Label propagation based graph coarsening: ")
-  //  private val graphLabelPropagation: Graph[Component, PartitionID] = sparkSession.time(graph.LPCoarse())
-
-  println("Label Propagation Algorithm GraphFrame: ")
-  private val gfLabelPropagationDF: DataFrame = sparkSession.time(graphFrame.labelPropagation.maxIter(5).run())
+  private val outputStartTime: Long = System.nanoTime()
 
   case class OutputClass(id: Long,
                          email: String,
@@ -160,7 +163,6 @@ object CommunityDetection extends App {
                          pScanCommunityDetection: Option[Long],
                          inNeighbors: Option[Array[VertexId]],
                          outNeighborIds: Option[Array[VertexId]]
-                         //                         graphLabelPropagation: Option[Component]
                         )
 
 
@@ -175,7 +177,6 @@ object CommunityDetection extends App {
       .leftOuterJoin(pScanCommunityDetection.vertices)
       .leftOuterJoin(inNeighbors)
       .leftOuterJoin(outNeighborIds)
-      //      .leftOuterJoin(graphLabelPropagation.vertices)
       .map({
         case (vertexID,
         (
@@ -185,7 +186,6 @@ object CommunityDetection extends App {
                 (
                   (
                     (
-                      //                      (
                       (
                         (email,
                         triangleCountOutput),
@@ -197,8 +197,6 @@ object CommunityDetection extends App {
               pScanCommunityDetection),
             inNeighbors),
           outNeighborIds)
-          //          graphLabelPropagation)
-
           )
         =>
           OutputClass(
@@ -213,12 +211,37 @@ object CommunityDetection extends App {
             pScanCommunityDetection,
             inNeighbors,
             outNeighborIds
-            //            graphLabelPropagation
           )
       }))
     .join(gfLabelPropagationDF, Seq("id"), "left_outer").drop("attr").withColumnRenamed("label", "graphFrameLabelPropagation")
     .sort("neighborhoodConnectivity")
 
-  vertexDF.show(571, truncate = true)
+  private val outputTime: Long = System.nanoTime() - outputStartTime
+  private val programTime: Long = System.nanoTime() - programStartTime
+
+  def stringify(c: Column) = concat(lit("["), concat_ws(",", c), lit("]"))
+
+  vertexDF.repartition(1)
+    .withColumn("inNeighbors", stringify(new Column("inNeighbors")))
+    .withColumn("outNeighborIds", stringify(new Column("outNeighborIds")))
+    .withColumn("preprocessTime", lit(TimeUnit.MILLISECONDS.convert(preprocessTime, TimeUnit.NANOSECONDS)))
+    .withColumn("graphBuildingTime", lit(TimeUnit.MILLISECONDS.convert(graphBuildingTime, TimeUnit.NANOSECONDS)))
+    .withColumn("triangleTime", lit(TimeUnit.MILLISECONDS.convert(triangleTime, TimeUnit.NANOSECONDS)))
+    .withColumn("ccTime", lit(TimeUnit.MILLISECONDS.convert(ccTime, TimeUnit.NANOSECONDS)))
+    .withColumn("sccTime", lit(TimeUnit.MILLISECONDS.convert(sccTime, TimeUnit.NANOSECONDS)))
+    .withColumn("inNeighborTime", lit(TimeUnit.MILLISECONDS.convert(inNeighborTime, TimeUnit.NANOSECONDS)))
+    .withColumn("outNeighborTime", lit(TimeUnit.MILLISECONDS.convert(outNeighborTime, TimeUnit.NANOSECONDS)))
+    .withColumn("neighborhoodConnectivityTime", lit(TimeUnit.MILLISECONDS.convert(neighborhoodConnectivityTime, TimeUnit.NANOSECONDS)))
+    .withColumn("vertexEmbeddednessTime", lit(TimeUnit.MILLISECONDS.convert(vertexEmbeddednessTime, TimeUnit.NANOSECONDS)))
+    .withColumn("localClusteringTime", lit(TimeUnit.MILLISECONDS.convert(localClusteringTime, TimeUnit.NANOSECONDS)))
+    .withColumn("pScanTime", lit(TimeUnit.MILLISECONDS.convert(pScanTime, TimeUnit.NANOSECONDS)))
+    .withColumn("labelPropagationTime", lit(TimeUnit.MILLISECONDS.convert(labelPropagationTime, TimeUnit.NANOSECONDS)))
+    .withColumn("outputTime", lit(TimeUnit.MILLISECONDS.convert(outputTime, TimeUnit.NANOSECONDS)))
+    .withColumn("programTime", lit(TimeUnit.MILLISECONDS.convert(programTime, TimeUnit.NANOSECONDS)))
+    .withColumn("NumberOfFiles", lit(files.length))
+    .withColumn("NumberOfVertices", lit(graph.numVertices))
+    .withColumn("NumberOfEdges", lit(graph.numEdges))
+    .withColumn("SparkContextConf", lit(sc.getConf.getAll.deep.toString()))
+    .write.option("header", value = true).csv("S:\\6410-proposal\\LocalResearchOutputs\\CommunityDetection\\local_fulldata_cpu" + cpu)
 
 }
