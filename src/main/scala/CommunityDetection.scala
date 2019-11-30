@@ -4,7 +4,6 @@ import java.util.Properties
 import java.util.concurrent.TimeUnit
 
 import scala.io.Codec
-import GraphCentrality.sparkSession
 import javax.mail.{Address, Session}
 import ml.sparkling.graph.operators.OperatorsDSL._
 import ml.sparkling.graph.api.operators.measures.VertexMeasureConfiguration
@@ -39,7 +38,7 @@ object CommunityDetection extends App {
   })
 
   private val fileUtil = new FileUtil()
-  private val files: Array[File] = fileUtil.recursiveListFiles(new File("S:\\6410-proposal\\maildir"))
+  private val files: Array[File] = fileUtil.recursiveListFiles(new File("enron-sample-dataset"))
 
   private val vertexArray =
     new ArrayBuffer[(VertexId, String)]()
@@ -77,6 +76,7 @@ object CommunityDetection extends App {
     edgeArray.append(Edge(sourceID, destinationID, 1))
   }
 
+  println( "Number of files: " + files.length )
   files.foreach(file => {
     val source = Source.fromFile(file)
     val fileString: String = source.mkString
