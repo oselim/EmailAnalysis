@@ -3,15 +3,12 @@ import java.nio.charset.CodingErrorAction
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 
-import scala.io.Codec
+import scala.io.{Codec, Source}
 import javax.mail.{Address, Session}
 import ml.sparkling.graph.operators.OperatorsDSL._
 import org.apache.spark.sql.Column
-
 import javax.mail.internet.{InternetAddress, MimeMessage}
 import org.apache.log4j.{Level, Logger}
-
-import scala.collection.mutable.ArrayBuffer
 import org.apache.spark._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, SparkSession}
@@ -24,16 +21,20 @@ object CommunityDetection extends App {
   val preprocessStartTime: Long = System.nanoTime()
   val programStartTime = System.nanoTime()
 
+  val cpu = 8
+  val datasetDir = "C:\\Users\\Selim-admin\\IdeaProjects\\EmailAnalysis-sparking\\enron-sample-dataset"
+  val checkPointDir = "S:\\6410-proposal\\checkPointing\\"
+  val applicationName = "LocalSampleData"
+  val outputDir = "S:\\6410-proposal\\LocalResearchOutputs\\" + applicationName + "_cpu_"
+  val unknownRecipient = "NonRecipient"
 
-  val cpu = 7
-
-  val conf = new SparkConf().setAppName("LocalAllData").setMaster("local[" + cpu + "]")
+  val conf = new SparkConf().setAppName(applicationName).setMaster("local[" + cpu + "]")
   val sc = new SparkContext(conf)
   val rootLogger = Logger.getRootLogger
-  rootLogger.setLevel(Level.ERROR)
+  rootLogger.setLevel(Level.TRACE)
   val sparkSession = SparkSession.builder.config(sc.getConf).getOrCreate()
 
-  sc.setCheckpointDir("S:\\6410-proposal\\checkPointing\\")
+  sc.setCheckpointDir(checkPointDir)
 
   println("Spark Started.")
 
@@ -56,70 +57,69 @@ object CommunityDetection extends App {
     files ++ these.filter(_.isDirectory).flatMap(recursiveListFiles)
   }
 
-  val files: Array[File] = recursiveListFiles(new File("S:\\6410-proposal\\maildir"))
-
+  val files: Array[File] = recursiveListFiles(new File(datasetDir))
+  println("Files Count: " + files.length)
   println("File List created.")
-
-  val vertexArray =
-    new ArrayBuffer[(VertexId, String)]()
-  val edgeArray =
-    new ArrayBuffer[Edge[Int]]()
-
-  def parseAddresses(fromAddresses: Array[Address], receiverAddresses: Array[Address]): Unit = {
-    fromAddresses.foreach(from => {
-      val fromString = from.toString
-      addToVertex(fromString)
-
-      receiverAddresses.foreach(receiver => {
-        val receiverString = receiver.toString
-        addToVertex(receiverString)
-        addToEdge(fromString, receiverString)
-      })
-    })
-  }
-
-  def addToVertex(email: String): Unit = {
-    var vID = 0L
-    if (!email.equals("NonRecipient"))
-      vID = email.hashCode.toLong
-
-    if (!vertexArray.exists(vertex => vertex._1.equals(vID))) {
-      vertexArray.append((vID, email))
-    }
-  }
-
-  def addToEdge(sourceAddress: String, destinationAddress: String): Unit = {
-    val sourceID = sourceAddress.hashCode.toLong
-    var destinationID = 0L
-    if (!destinationAddress.equals("NonRecipient"))
-      destinationID = destinationAddress.hashCode.toLong
-    edgeArray.append(Edge(sourceID, destinationID, 1))
-  }
-
   println("File read Starting.")
 
-  files.foreach(file => {
-    val fileRDD = sc.wholeTextFiles("file:///" + file )
-    val fileString: String = fileRDD.first()._2
-    val mimeMessage = new MimeMessage(session, new ByteArrayInputStream(fileString.getBytes))
+  val filesRDD: RDD[String] = sc.parallelize(files.map(_.getAbsolutePath), cpu)
+
+  val mimeMessageRDD: RDD[MimeMessage] = filesRDD.map(file => {
+    val source = Source.fromFile(file)
+    val fileString: String = source.mkString
+    new MimeMessage(session, new ByteArrayInputStream(fileString.getBytes))
+  })
+
+  val fromAndRecipientsArrayTuples: RDD[(Array[Address], Array[Address])] = mimeMessageRDD.map(mimeMessage => {
     val fromAddresses = mimeMessage.getFrom
     var allRecipients = mimeMessage.getAllRecipients
     if (allRecipients == null) {
-      allRecipients = Array.apply(new InternetAddress("NonRecipient", false))
+      allRecipients = Array.apply(new InternetAddress(unknownRecipient, false))
     }
-    parseAddresses(fromAddresses, allRecipients)
+    (fromAddresses, allRecipients)
   })
 
+  val fromAndRecipientsTuples: RDD[(String, String)] = fromAndRecipientsArrayTuples.flatMap(x => {
+    x._1.flatMap(fromAddress => {
+      x._2.map(receiverAddress => {
+        (fromAddress.toString, receiverAddress.toString)
+      })
+    })
+  })
+
+  val vertexFromRDD: RDD[(VertexId, String)] = fromAndRecipientsTuples.map(x => {
+    val fromString = x._1
+    (fromString.hashCode.toLong, fromString)
+  })
+
+  private val vertexReceiverRDD: RDD[(VertexId, String)] = fromAndRecipientsTuples.map(x => {
+    val receiverString = x._2
+    var vertexID = 0L
+    if (!receiverString.equals(unknownRecipient))
+      vertexID = receiverString.hashCode.toLong
+    (vertexID, receiverString)
+  })
+
+  private val vertexRDD: RDD[(VertexId, String)] = vertexFromRDD.union(vertexReceiverRDD).distinct()
+
+  println("Vertex Count: " + vertexRDD.count())
+
+  val edgeRDD: RDD[Edge[Int]] = fromAndRecipientsTuples.map(x => {
+    val fromString = x._1
+    val receiverString = x._2
+    var destinationID = 0L
+    if (!receiverString.equals(unknownRecipient))
+      destinationID = receiverString.hashCode.toLong
+    new Edge[Int](fromString.hashCode.toLong, destinationID, 1)
+  })
+  println("Edge Count: " + edgeRDD.count())
   println("Preprocess finished. File Read finished.")
 
-  private val preprocessTime: Long = System.nanoTime() - preprocessStartTime
-  private val graphBuildingStartTime = System.nanoTime()
+  val preprocessTime: Long = System.nanoTime() - preprocessStartTime
+  val graphBuildingStartTime = System.nanoTime()
 
-  private val vertexRDD: RDD[(VertexId, String)] = sc.parallelize(vertexArray)
-  private val edgeRDD: RDD[Edge[Int]] = sc.parallelize(edgeArray)
-
-  private val graph = Graph(vertexRDD, edgeRDD)
-  private val graphFrame: GraphFrame = GraphFrame.fromGraphX(graph)
+  val graph = Graph(vertexRDD, edgeRDD)
+  val graphFrame: GraphFrame = GraphFrame.fromGraphX(graph)
 
   println("Graphs created.")
   println("Algorithms running.")
@@ -259,6 +259,6 @@ object CommunityDetection extends App {
     .withColumn("NumberOfVertices", lit(graph.numVertices))
     .withColumn("NumberOfEdges", lit(graph.numEdges))
     .withColumn("SparkContextConf", lit(sc.getConf.getAll.deep.toString()))
-    .write.option("header", value = true).csv("S:\\6410-proposal\\LocalResearchOutputs\\CommunityDetection\\local_fulldata_cpu" + cpu)
+    .write.option("header", value = true).csv(outputDir + cpu)
 
 }
