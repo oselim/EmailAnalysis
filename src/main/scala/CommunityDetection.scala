@@ -6,10 +6,8 @@ import java.util.concurrent.TimeUnit
 import scala.io.Codec
 import javax.mail.{Address, Session}
 import ml.sparkling.graph.operators.OperatorsDSL._
-import util.FileUtil
 import org.apache.spark.sql.Column
 
-import scala.io.Source
 import javax.mail.internet.{InternetAddress, MimeMessage}
 import org.apache.log4j.{Level, Logger}
 
@@ -23,8 +21,21 @@ import org.graphframes.GraphFrame
 
 object CommunityDetection extends App {
 
-  private val preprocessStartTime: Long = System.nanoTime()
-  private val programStartTime = System.nanoTime()
+  val preprocessStartTime: Long = System.nanoTime()
+  val programStartTime = System.nanoTime()
+
+
+  val cpu = 7
+
+  val conf = new SparkConf().setAppName("LocalAllData").setMaster("local[" + cpu + "]")
+  val sc = new SparkContext(conf)
+  val rootLogger = Logger.getRootLogger
+  rootLogger.setLevel(Level.ERROR)
+  val sparkSession = SparkSession.builder.config(sc.getConf).getOrCreate()
+
+  sc.setCheckpointDir("S:\\6410-proposal\\checkPointing\\")
+
+  println("Spark Started.")
 
   System.setProperty("mail.mime.address.strict", "false")
 
@@ -37,13 +48,21 @@ object CommunityDetection extends App {
     put("mail.mime.address.strict", "false")
   })
 
-  private val fileUtil = new FileUtil()
-  //  private val files: Array[File] = fileUtil.recursiveListFiles(new File("S:\\6410-proposal\\maildir"))
-  private val files: Array[File] = fileUtil.recursiveListFiles(new File("enron-sample-dataset"))
+  println("Program Started.")
 
-  private val vertexArray =
+  def recursiveListFiles(f: File): Array[File] = {
+    val these = f.listFiles
+    val files = these.filter(_.isFile)
+    files ++ these.filter(_.isDirectory).flatMap(recursiveListFiles)
+  }
+
+  val files: Array[File] = recursiveListFiles(new File("S:\\6410-proposal\\maildir"))
+
+  println("File List created.")
+
+  val vertexArray =
     new ArrayBuffer[(VertexId, String)]()
-  private val edgeArray =
+  val edgeArray =
     new ArrayBuffer[Edge[Int]]()
 
   def parseAddresses(fromAddresses: Array[Address], receiverAddresses: Array[Address]): Unit = {
@@ -77,9 +96,11 @@ object CommunityDetection extends App {
     edgeArray.append(Edge(sourceID, destinationID, 1))
   }
 
+  println("File read Starting.")
+
   files.foreach(file => {
-    val source = Source.fromFile(file)
-    val fileString: String = source.mkString
+    val fileRDD = sc.wholeTextFiles("file:///" + file )
+    val fileString: String = fileRDD.first()._2
     val mimeMessage = new MimeMessage(session, new ByteArrayInputStream(fileString.getBytes))
     val fromAddresses = mimeMessage.getFrom
     var allRecipients = mimeMessage.getAllRecipients
@@ -87,17 +108,9 @@ object CommunityDetection extends App {
       allRecipients = Array.apply(new InternetAddress("NonRecipient", false))
     }
     parseAddresses(fromAddresses, allRecipients)
-
-    source.close()
   })
-  val cpu = 8
-  val conf = new SparkConf().setAppName("LocalAllData").setMaster("local[" + cpu + "]")
-  val sc = new SparkContext(conf)
-  val rootLogger = Logger.getRootLogger
-  rootLogger.setLevel(Level.ERROR)
-  val sparkSession = SparkSession.builder.config(sc.getConf).getOrCreate()
 
-  sc.setCheckpointDir("S:\\6410-proposal\\checkPointing\\")
+  println("Preprocess finished. File Read finished.")
 
   private val preprocessTime: Long = System.nanoTime() - preprocessStartTime
   private val graphBuildingStartTime = System.nanoTime()
@@ -107,6 +120,9 @@ object CommunityDetection extends App {
 
   private val graph = Graph(vertexRDD, edgeRDD)
   private val graphFrame: GraphFrame = GraphFrame.fromGraphX(graph)
+
+  println("Graphs created.")
+  println("Algorithms running.")
 
   private val graphBuildingTime = System.nanoTime() - graphBuildingStartTime
 
@@ -150,6 +166,7 @@ object CommunityDetection extends App {
   private val gfLabelPropagationDF: DataFrame = graphFrame.labelPropagation.maxIter(5).run()
   private val labelPropagationTime: Long = System.nanoTime() - labelPropagationStartTime
 
+  println("Algorithms finished.")
   private val outputStartTime: Long = System.nanoTime()
 
   case class OutputClass(id: Long,
