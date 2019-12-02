@@ -3,7 +3,6 @@ import java.nio.charset.CodingErrorAction
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 import util.SerializableMimeMessage
-
 import scala.io.{Codec, Source}
 import javax.mail.{Address, Session}
 import ml.sparkling.graph.operators.OperatorsDSL._
@@ -23,7 +22,7 @@ object CommunityDetection extends App {
   val programStartTime = System.nanoTime()
 
   val cpu = 1
-//  val datasetDir = "C:\\Users\\Selim-admin\\IdeaProjects\\EmailAnalysis-sparking\\enron-sample-dataset"
+  //  val datasetDir = "C:\\Users\\Selim-admin\\IdeaProjects\\EmailAnalysis-sparking\\enron-sample-dataset"
   val datasetDir = "S:\\6410-proposal\\maildir"
   val checkPointDir = "S:\\6410-proposal\\checkPointing\\"
   val applicationName = "LocalAllData"

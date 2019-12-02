@@ -14,7 +14,7 @@ import com.sun.mail.smtp.SMTPOutputStream
 @SerialVersionUID(3763328805281033284L)
 class SerializableMimeMessage(var mimeMessage: MimeMessage) extends Serializable {
   @throws[IOException]
-  private def writeObject(oos: ObjectOutputStream) = { // convert
+  private def writeObject(oos: ObjectOutputStream): Unit = { // convert
     val baos = new ByteArrayOutputStream
     val os = new SMTPOutputStream(baos)
     try mimeMessage.writeTo(os)
@@ -33,7 +33,7 @@ class SerializableMimeMessage(var mimeMessage: MimeMessage) extends Serializable
 
   @throws[ClassNotFoundException]
   @throws[IOException]
-  private def readObject(ois: ObjectInputStream) = { // default deserialization
+  private def readObject(ois: ObjectInputStream): Unit = { // default deserialization
     ois.defaultReadObject()
     // read the object
     val len = ois.readInt
@@ -47,5 +47,5 @@ class SerializableMimeMessage(var mimeMessage: MimeMessage) extends Serializable
     }
   }
 
-  def getMimeMessage = mimeMessage
+  def getMimeMessage: MimeMessage = mimeMessage
 }
