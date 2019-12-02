@@ -26,6 +26,12 @@ class HDFSUtil {
   filenames.take(600)
   println(filenames.length)
 
+  private val fileNamesRDD: RDD[String] = sc.parallelize(filenames)
+  fileNamesRDD.collect().deep
+  fileNamesRDD.map( file => {
+
+  })
+
   private val file: RDD[(String, String)] = sc.wholeTextFiles("/opt/phd/enron-sample-dataset/allen-p/_sent_mail/10.")
   private val fileString: String = file.first()._2
 

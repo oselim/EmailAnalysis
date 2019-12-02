@@ -2,6 +2,7 @@ import java.io.{ByteArrayInputStream, File}
 import java.nio.charset.CodingErrorAction
 import java.util.Properties
 import java.util.concurrent.TimeUnit
+import util.SerializableMimeMessage
 
 import scala.io.{Codec, Source}
 import javax.mail.{Address, Session}
@@ -21,11 +22,12 @@ object CommunityDetection extends App {
   val preprocessStartTime: Long = System.nanoTime()
   val programStartTime = System.nanoTime()
 
-  val cpu = 8
-  val datasetDir = "C:\\Users\\Selim-admin\\IdeaProjects\\EmailAnalysis-sparking\\enron-sample-dataset"
+  val cpu = 1
+//  val datasetDir = "C:\\Users\\Selim-admin\\IdeaProjects\\EmailAnalysis-sparking\\enron-sample-dataset"
+  val datasetDir = "S:\\6410-proposal\\maildir"
   val checkPointDir = "S:\\6410-proposal\\checkPointing\\"
-  val applicationName = "LocalSampleData"
-  val outputDir = "S:\\6410-proposal\\LocalResearchOutputs\\" + applicationName + "_cpu_"
+  val applicationName = "LocalAllData"
+  val outputDir = "S:\\6410-proposal\\LocalResearchOutputs\\CommunityDetection\\" + applicationName + "_cpu_"
   val unknownRecipient = "NonRecipient"
 
   val conf = new SparkConf().setAppName(applicationName).setMaster("local[" + cpu + "]")
@@ -40,10 +42,7 @@ object CommunityDetection extends App {
 
   System.setProperty("mail.mime.address.strict", "false")
 
-  implicit val codec: Codec = Codec.ISO8859
-  codec.onMalformedInput(CodingErrorAction.REPLACE)
-  codec.onUnmappableCharacter(CodingErrorAction.REPLACE)
-
+  @transient
   val session = Session.getDefaultInstance(new Properties() {
     put("mail.smtp.host", "host")
     put("mail.mime.address.strict", "false")
@@ -64,15 +63,18 @@ object CommunityDetection extends App {
 
   val filesRDD: RDD[String] = sc.parallelize(files.map(_.getAbsolutePath), cpu)
 
-  val mimeMessageRDD: RDD[MimeMessage] = filesRDD.map(file => {
+  val mimeMessageRDD: RDD[SerializableMimeMessage] = filesRDD.map(file => {
+    implicit val codec: Codec = Codec.ISO8859
+    codec.onMalformedInput(CodingErrorAction.REPLACE)
+    codec.onUnmappableCharacter(CodingErrorAction.REPLACE)
     val source = Source.fromFile(file)
     val fileString: String = source.mkString
-    new MimeMessage(session, new ByteArrayInputStream(fileString.getBytes))
+    new SerializableMimeMessage(new MimeMessage(session, new ByteArrayInputStream(fileString.getBytes)))
   })
 
-  val fromAndRecipientsArrayTuples: RDD[(Array[Address], Array[Address])] = mimeMessageRDD.map(mimeMessage => {
-    val fromAddresses = mimeMessage.getFrom
-    var allRecipients = mimeMessage.getAllRecipients
+  val fromAndRecipientsArrayTuples: RDD[(Array[Address], Array[Address])] = mimeMessageRDD.map(serializableMimeMessage => {
+    val fromAddresses = serializableMimeMessage.getMimeMessage.getFrom
+    var allRecipients = serializableMimeMessage.getMimeMessage.getAllRecipients
     if (allRecipients == null) {
       allRecipients = Array.apply(new InternetAddress(unknownRecipient, false))
     }
@@ -92,7 +94,7 @@ object CommunityDetection extends App {
     (fromString.hashCode.toLong, fromString)
   })
 
-  private val vertexReceiverRDD: RDD[(VertexId, String)] = fromAndRecipientsTuples.map(x => {
+  val vertexReceiverRDD: RDD[(VertexId, String)] = fromAndRecipientsTuples.map(x => {
     val receiverString = x._2
     var vertexID = 0L
     if (!receiverString.equals(unknownRecipient))
@@ -100,7 +102,7 @@ object CommunityDetection extends App {
     (vertexID, receiverString)
   })
 
-  private val vertexRDD: RDD[(VertexId, String)] = vertexFromRDD.union(vertexReceiverRDD).distinct()
+  val vertexRDD: RDD[(VertexId, String)] = vertexFromRDD.union(vertexReceiverRDD).distinct()
 
   println("Vertex Count: " + vertexRDD.count())
 
