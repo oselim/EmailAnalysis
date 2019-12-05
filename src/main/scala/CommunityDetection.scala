@@ -25,7 +25,7 @@ object CommunityDetection extends App {
   val programStartTime = System.nanoTime()
 
 
-  val cpu = 7
+  val cpu = 6
 
   val conf = new SparkConf().setAppName("LocalAllData").setMaster("local[" + cpu + "]")
   val sc = new SparkContext(conf)
