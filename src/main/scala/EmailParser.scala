@@ -1,4 +1,5 @@
 import java.io.{ByteArrayInputStream, File}
+import java.nio.charset.CodingErrorAction
 import java.util.Properties
 
 import com.centrality.kBC.KBetweenness
@@ -9,7 +10,7 @@ import ml.sparkling.graph.operators.OperatorsDSL._
 import ml.sparkling.graph.api.operators.measures.VertexMeasureConfiguration
 import ml.sparkling.graph.api.operators.algorithms.coarsening.CoarseningAlgorithm.Component
 
-import scala.io.Source
+import scala.io.{Codec, Source}
 import javax.mail.internet.{InternetAddress, MimeMessage}
 import org.apache.log4j.{Level, Logger}
 
@@ -24,7 +25,9 @@ import org.apache.spark.sql.functions._
 import org.graphframes.GraphFrame
 
 object EmailParser extends App {
-
+  implicit val codec: Codec = Codec.ISO8859
+  codec.onMalformedInput(CodingErrorAction.REPLACE)
+  codec.onUnmappableCharacter(CodingErrorAction.REPLACE)
 
   System.setProperty("mail.mime.address.strict", "false")
 
@@ -74,8 +77,11 @@ object EmailParser extends App {
     val source = Source.fromFile(file)
     val fileString: String = source.mkString
     val mimeMessage = new MimeMessage(session, new ByteArrayInputStream(fileString.getBytes))
-    val fromAddresses = mimeMessage.getFrom
+    var fromAddresses = mimeMessage.getFrom
     var allRecipients = mimeMessage.getAllRecipients
+    if (fromAddresses == null ){
+      fromAddresses = Array.apply(new InternetAddress("NonRecipient", false))
+    }
     if (allRecipients == null) {
       allRecipients = Array.apply(new InternetAddress("NonRecipient", false))
     }
