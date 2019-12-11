@@ -29,13 +29,15 @@ object GraphCentrality extends App {
   val preprocessStartTime: Long = System.nanoTime()
   val programStartTime = System.nanoTime()
 
-  val cpu = 4
-  val datasetDir = "/Users/selimozcan/IdeaProjects/EmailAnalysis/enron-sample-dataset"
-  // val datasetDir = "S:\\6410-proposal\\maildir"
-  val checkPointDir = "/Users/selimozcan/IdeaProjects/EmailAnalysis-service-folder/checkPointing/"
-  val applicationName = "LocalSampleData"
-  val outputDir = "/Users/selimozcan/IdeaProjects/EmailAnalysis-service-folder/outputs/centrality/" + applicationName + "_cpu4_"
+  val cpu = 8
+  //val datasetDir = "C:\\Users\\Selim-admin\\IdeaProjects\\EmailAnalysis-sparking\\enron-sample-dataset"
+  val datasetDir = "S:\\6410-proposal\\maildir"
+  val checkPointDir = "S:\\6410-proposal\\checkPointing"
+  val applicationName = "LocalAllData"
+  val outputDir = "S:\\6410-proposal\\LocalResearchOutputs\\GraphCentrality\\" + applicationName + "_cpu_"
   val unknownRecipient = "NonRecipient"
+
+  // System.setProperty("hadoop.home.dir", "C:\\Users\\Selim-admin\\IdeaProjects\\EmailAnalysis-sparking\\null\\bin")
 
   val conf = new SparkConf().setAppName(applicationName).setMaster("local[" + cpu + "]")
   val sc = new SparkContext(conf)
@@ -80,10 +82,10 @@ object GraphCentrality extends App {
   })
 
   val fromAndRecipientsArrayTuples: RDD[(Array[Address], Array[Address])] = mimeMessageRDD.map(serializableMimeMessage => {
-    var fromAddresses = serializableMimeMessage.getMimeMessage.getFrom
-    if (fromAddresses == null ){
+    val fromAddresses = serializableMimeMessage.getMimeMessage.getFrom
+/*    if (fromAddresses == null ){
       fromAddresses = Array.apply(new InternetAddress(unknownRecipient, false))
-    }
+    }*/
     var allRecipients = serializableMimeMessage.getMimeMessage.getAllRecipients
     if (allRecipients == null) {
       allRecipients = Array.apply(new InternetAddress(unknownRecipient, false))
@@ -137,21 +139,22 @@ object GraphCentrality extends App {
 
   val graphBuildingTime = System.nanoTime() - graphBuildingStartTime
 
+  /*
   println("Closeness Centrality: ")
   val closenessCentralityStartTime: Long = System.nanoTime()
   val graphClosenessCentrality: Graph[Double, PartitionID] = sparkSession.time( graph.closenessCentrality() ) //VertexMeasureConfiguration(treatAsUndirected = true))
   val closenessCentralityTime: Long = System.nanoTime() - closenessCentralityStartTime
-
+*/
   println("PageRank: " )
   val pageRankStartTime: Long = System.nanoTime()
   val pageRank: Graph[Double, Double] = sparkSession.time(graph.pageRank(0.0001) )
   val pageRankTime: Long = System.nanoTime() - pageRankStartTime
-
+/*
   println("K-Betweenness: ")
   val KBetweennessStartTime: Long = System.nanoTime()
   val kBetweenness: Graph[Double, Double] = sparkSession.time(KBetweenness.run(graph, 2) )
   val kBetweennessTime: Long = System.nanoTime() - KBetweennessStartTime
-
+*/
   println("Eigen Vector Centrality: " )
   val eigenVectorCentralityStartTime: Long = System.nanoTime()
   val graphEigenVectorCentrality: Graph[Double, PartitionID] = sparkSession.time(graph.eigenvectorCentrality() )
@@ -170,9 +173,9 @@ object GraphCentrality extends App {
                          email: String,
                          inDegree: Option[Int],
                          outDegree: Option[Int],
-                         closenessCentrality: Option[Double],
+                         //closenessCentrality: Option[Double],
                          pageRank: Option[Double],
-                         kBetweennessCentrality: Option[Double],
+                         //kBetweennessCentrality: Option[Double],
                          eigenVectorCentrality: Option[Double],
                          harmonicCentrality: Option[Double]
                         )
@@ -182,9 +185,9 @@ object GraphCentrality extends App {
     graph.vertices
       .leftOuterJoin(graph.inDegrees)
       .leftOuterJoin(graph.outDegrees)
-      .leftOuterJoin(graphClosenessCentrality.vertices)
+      //.leftOuterJoin(graphClosenessCentrality.vertices)
       .leftOuterJoin(pageRank.vertices)
-      .leftOuterJoin(kBetweenness.vertices)
+      //.leftOuterJoin(kBetweenness.vertices)
       .leftOuterJoin(graphEigenVectorCentrality.vertices)
       .leftOuterJoin(harmonicCentrality.vertices)
 
@@ -194,15 +197,15 @@ object GraphCentrality extends App {
           (
             (
               (
-                (
-                  (
+                //(
+                  //(
                     (
                       (email,
                       inDegreeOutput),
                       outDegreeOutput),
-                    closenessCent),
+                    //closenessCent),
                   pageRankValue),
-                kBetweennessOutput),
+              //  kBetweennessOutput),
               eigenVectorCent),
             harmonicCentralityOutput)
           )
@@ -212,15 +215,15 @@ object GraphCentrality extends App {
             email,
             inDegreeOutput,
             outDegreeOutput,
-            closenessCent,
+            //closenessCent,
             pageRankValue,
-            kBetweennessOutput,
+            //kBetweennessOutput,
             eigenVectorCent,
             harmonicCentralityOutput
           )
-      })).na.fill(0).sort("pageRank", "kBetweennessCentrality")
+      })).na.fill(0).sort("pageRank")
 
-  vertexDF.show(571, truncate = false)
+  //vertexDF.show(571, truncate = false)
 
   val outputTime: Long = System.nanoTime() - outputStartTime
   val programTime: Long = System.nanoTime() - programStartTime
@@ -231,9 +234,9 @@ object GraphCentrality extends App {
   vertexDF.repartition(1)
     .withColumn("preprocessTime", lit(TimeUnit.MILLISECONDS.convert(preprocessTime, TimeUnit.NANOSECONDS)))
     .withColumn("graphBuildingTime", lit(TimeUnit.MILLISECONDS.convert(graphBuildingTime, TimeUnit.NANOSECONDS)))
-    .withColumn("closenessCentralityTime", lit(TimeUnit.MILLISECONDS.convert(closenessCentralityTime, TimeUnit.NANOSECONDS)))
+    //.withColumn("closenessCentralityTime", lit(TimeUnit.MILLISECONDS.convert(closenessCentralityTime, TimeUnit.NANOSECONDS)))
     .withColumn("pageRankTime", lit(TimeUnit.MILLISECONDS.convert(pageRankTime, TimeUnit.NANOSECONDS)))
-    .withColumn("kBetweennessTime", lit(TimeUnit.MILLISECONDS.convert(kBetweennessTime, TimeUnit.NANOSECONDS)))
+    //.withColumn("kBetweennessTime", lit(TimeUnit.MILLISECONDS.convert(kBetweennessTime, TimeUnit.NANOSECONDS)))
     .withColumn("eigenVectorCentralityTime", lit(TimeUnit.MILLISECONDS.convert(eigenVectorCentralityTime, TimeUnit.NANOSECONDS)))
     .withColumn("harmonicCentralityTime", lit(TimeUnit.MILLISECONDS.convert(harmonicCentralityTime, TimeUnit.NANOSECONDS)))
     .withColumn("outputTime", lit(TimeUnit.MILLISECONDS.convert(outputTime, TimeUnit.NANOSECONDS)))
